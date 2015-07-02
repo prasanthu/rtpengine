@@ -1805,6 +1805,7 @@ static int __init_stream(struct packet_stream *ps) {
 
 		if (MEDIA_ISSET(media, DTLS) && !PS_ISSET(ps, FALLBACK_RTCP)) {
 			active = (PS_ISSET(ps, FILLED) && MEDIA_ISSET(media, SETUP_ACTIVE));
+			ilog(LOG_DEBUG, "calling dtls_connection_init");
 			dtls_connection_init(ps, active, call->dtls_cert);
 
 			if (!PS_ISSET(ps, FINGERPRINT_VERIFIED) && media->fingerprint.hash_func

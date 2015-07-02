@@ -349,6 +349,7 @@ static void options(int *argc, char ***argv) {
 	if (xmlrpc_fmt > 1)
 		die("Invalid XMLRPC format");
 
+	log_level = LOG_DEBUG;
 	if ((log_level < LOG_EMERG) || (log_level > LOG_DEBUG))
 	        die("Invalid log level (--log_level)");
 	setlogmask(LOG_UPTO(log_level));

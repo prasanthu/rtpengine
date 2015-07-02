@@ -21,7 +21,7 @@
 
 
 
-#define DTLS_DEBUG 0
+#define DTLS_DEBUG 1
 
 #if DTLS_DEBUG
 #define __DBG(x...) ilog(LOG_DEBUG, x)
