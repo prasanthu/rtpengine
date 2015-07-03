@@ -1805,11 +1805,9 @@ static int __init_stream(struct packet_stream *ps) {
 
 		if (MEDIA_ISSET(media, DTLS) && !PS_ISSET(ps, FALLBACK_RTCP)) {
 			active = (PS_ISSET(ps, FILLED) && MEDIA_ISSET(media, SETUP_ACTIVE));
-			ilog(LOG_DEBUG, "calling dtls_connection_init");
-			ilog(LOG_DEBUG, "debug marker----");
 			if (active && (PS_ISSET(ps, FILLED) && MEDIA_ISSET(media, SETUP_PASSIVE)))
 			{
-			    ilog(LOG_DEBUG, "reset active due to actpass");
+			    ilog(LOG_INFO, "reset active due to actpass");
 			    active = 0;
 			}
 			dtls_connection_init(ps, active, call->dtls_cert);
