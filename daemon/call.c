@@ -687,10 +687,6 @@ loop_ok:
 	if (rtcp && sink && sink->rtcp_sibling)
 		out_srtp = sink->rtcp_sibling;
 
-        if (media->protocol && media->protocol->rtp && !rtcp && !rtp_payload(&rtp_h, NULL, s)) {
-                is_rtp_packet = 1;
-        }
-
 	if (!sink || !sink->sfd || !out_srtp->sfd || !in_srtp->sfd) {
 		ilog(LOG_WARNING, "RTP packet from %s discarded", addr);
 		mutex_lock(&stream->in_lock);
@@ -708,7 +704,7 @@ loop_ok:
 	if (!rtcp) {
 		rwf_in = in_srtp->handler->in->rtp;
 		rwf_out = in_srtp->handler->out->rtp;
-              
+                is_rtp_packet = 1;
 	}
 	else {
 		rwf_in = in_srtp->handler->in->rtcp;
