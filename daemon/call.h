@@ -377,6 +377,14 @@ struct interface_address {
 	char			foundation_buf[16];
 };
 
+struct libjitter_api {
+         void * handle;
+         void (*init)();
+         void (*shutdown)();
+         int  (*sendmsg)(int socket, const struct msghdr *message, int flags);
+         void (*close)(int socket);
+};
+
 struct callmaster_config {
 	int			kernelfd;
 	int			kernelid;
@@ -390,6 +398,7 @@ struct callmaster_config {
 	char			*b2b_url;
 	unsigned char		default_tos;
 	enum xmlrpc_format	fmt;
+        struct libjitter_api    libjitter;
 };
 
 struct callmaster {

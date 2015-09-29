@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <openssl/ssl.h>
+#include <dlfcn.h>
 
 #include "poller.h"
 #include "control_tcp.h"
@@ -451,6 +452,24 @@ static void init_everything() {
 	dtls_init();
 }
 
+void init_libjitter_api(struct libjitter_api *ctx) {
+        const char * error_msg;
+        ctx->handle = dlopen("libjitter.so", RTLD_LAZY);
+        if (!ctx->handle) {
+          ilog(LOG_INFO, "Failed to load libjitter.so");
+          return;
+        }
+        ctx->sendmsg = dlsym(ctx->handle, "libjitter_sendmsg");
+        if ((error_msg = dlerror()) != NULL)  {
+          die("Error loading symbols from libjitter.so: %s", error_msg);
+        }
+        ctx->init = dlsym(ctx->handle, "libjitter_init");
+        ctx->close = dlsym(ctx->handle, "libjitter_close");
+        ctx->shutdown = dlsym(ctx->handle, "libjitter_shutdown");
+        ilog(LOG_INFO, "Linked to libjitter OK, sendmsg@(%p)", ctx->sendmsg);
+}
+
+
 void redis_mod_verify(void *dlh) {
 	dlresolve(redis_new);
 	dlresolve(redis_restore);
@@ -602,6 +621,7 @@ no_kernel:
 			die("Cannot start up without Redis database");
 	}
 
+        init_libjitter_api(&mc.libjitter);
 	ctx->m->conf = mc;
 	callmaster_config_init(ctx->m);
 

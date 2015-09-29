@@ -603,6 +603,8 @@ static int stream_packet(struct stream_fd *sfd, str *s, struct sockaddr_in6 *fsi
 	struct endpoint endpoint;
 	rewrite_func rwf_in, rwf_out;
 	struct interface_address *loc_addr;
+        int can_use_libjitter = 1;
+        int is_rtp_packet = 0;
 
 	call = sfd->call;
 	cm = call->callmaster;
@@ -685,6 +687,10 @@ loop_ok:
 	if (rtcp && sink && sink->rtcp_sibling)
 		out_srtp = sink->rtcp_sibling;
 
+        if (media->protocol && media->protocol->rtp && !rtcp && !rtp_payload(&rtp_h, NULL, s)) {
+                is_rtp_packet = 1;
+        }
+
 	if (!sink || !sink->sfd || !out_srtp->sfd || !in_srtp->sfd) {
 		ilog(LOG_WARNING, "RTP packet from %s discarded", addr);
 		mutex_lock(&stream->in_lock);
@@ -702,6 +708,7 @@ loop_ok:
 	if (!rtcp) {
 		rwf_in = in_srtp->handler->in->rtp;
 		rwf_out = in_srtp->handler->out->rtp;
+              
 	}
 	else {
 		rwf_in = in_srtp->handler->in->rtcp;
@@ -839,7 +846,23 @@ forward:
 	mh.msg_iov = &iov;
 	mh.msg_iovlen = 1;
 
-	ret = sendmsg(sink->sfd->fd.fd, &mh, 0);
+        if (!cm->conf.libjitter.sendmsg) {
+                can_use_libjitter = 0;
+        }
+
+        if (!is_rtp_packet) {
+                can_use_libjitter = 0;
+        }
+
+        if (sink && (sink->media->protocol->srtp | sink->media->protocol->avpf)) {
+                can_use_libjitter = 0;                
+        }
+
+        if (can_use_libjitter == 1) {
+                ret = cm->conf.libjitter.sendmsg(sink->sfd->fd.fd, &mh, 0);
+        } else {
+	        ret = sendmsg(sink->sfd->fd.fd, &mh, 0);
+        }
 
 	if (ret == -1) {
 		ret = -errno;
@@ -2599,6 +2622,9 @@ void call_destroy(struct call *c) {
 
 	while (c->stream_fds) {
 		sfd = c->stream_fds->data;
+                if (m->conf.libjitter.close != NULL) {
+                         m->conf.libjitter.close(sfd->fd.fd);
+                }
 		c->stream_fds = g_slist_delete_link(c->stream_fds, c->stream_fds);
 		poller_del_item(p, sfd->fd.fd);
 		obj_put(sfd);
