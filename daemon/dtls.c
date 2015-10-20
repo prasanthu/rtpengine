@@ -21,10 +21,10 @@
 
 
 
-#define DTLS_DEBUG 0
+#define DTLS_DEBUG 1
 
 #if DTLS_DEBUG
-#define __DBG(x...) ilog(LOG_DEBUG, x)
+#define __DBG(x...) ilog(LOG_WARNING, x)
 #else
 #define __DBG(x...) ((void)0)
 #endif
