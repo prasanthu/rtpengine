@@ -2216,6 +2216,9 @@ static void __dtls_logic(const struct sdp_ng_flags *flags, struct call_media *me
 	if (memcmp(&other_media->fingerprint, &sp->fingerprint, sizeof(sp->fingerprint))) {
 		__fingerprint_changed(other_media);
 		other_media->fingerprint = sp->fingerprint;
+                // restart ice
+                media->ice_ufrag = STR_NULL;
+                media->ice_pwd =STR_NULL;
 	}
 	MEDIA_CLEAR(other_media, DTLS);
 	if ((MEDIA_ISSET(other_media, SETUP_PASSIVE) || MEDIA_ISSET(other_media, SETUP_ACTIVE))
