@@ -2187,10 +2187,11 @@ get:
 }
 
 
-static void __dtls_logic(const struct sdp_ng_flags *flags, struct call_media *media,
+static void __dtls_logic(const struct call *call, const struct sdp_ng_flags *flags, struct call_media *media,
 		struct call_media *other_media, struct stream_params *sp)
 {
 	unsigned int tmp;
+	struct callmaster *m = call->callmaster;
 
 	/* active and passive are from our POV */
 	tmp = other_media->media_flags;
@@ -2214,11 +2215,19 @@ static void __dtls_logic(const struct sdp_ng_flags *flags, struct call_media *me
 	}
 
 	if (memcmp(&other_media->fingerprint, &sp->fingerprint, sizeof(sp->fingerprint))) {
+          GSList *l;
+          struct stream_fd *sfd;
 		__fingerprint_changed(other_media);
 		other_media->fingerprint = sp->fingerprint;
                 // restart ice
                 media->ice_ufrag = STR_NULL;
                 media->ice_pwd =STR_NULL;
+                for (l = call->stream_fds; l; l = l->next) {
+                  sfd = l->data;
+                  if (m->conf.libjitter.close != NULL) {
+                    m->conf.libjitter.close(sfd->fd.fd);
+                  }
+                }
 	}
 	MEDIA_CLEAR(other_media, DTLS);
 	if ((MEDIA_ISSET(other_media, SETUP_PASSIVE) || MEDIA_ISSET(other_media, SETUP_ACTIVE))
@@ -2300,7 +2309,7 @@ int monologue_offer_answer(struct call_monologue *other_ml, GQueue *streams,
 		bf_copy(&other_media->media_flags, MEDIA_FLAG_SEND, &sp->sp_flags, SP_FLAG_RECV);
 
 		/* DTLS stuff */
-		__dtls_logic(flags, media, other_media, sp);
+		__dtls_logic(call, flags, media, other_media, sp);
 
 		/* ICE negotiation */
 		__ice_offer(flags, media, other_media);
