@@ -2224,6 +2224,7 @@ static void __dtls_logic(const struct call *call, const struct sdp_ng_flags *fla
                 media->ice_pwd =STR_NULL;
                 for (l = call->stream_fds; l; l = l->next) {
                   sfd = l->data;
+                  PS_CLEAR(sfd->stream, CONFIRMED);
                   if (m->conf.libjitter.close != NULL) {
                     m->conf.libjitter.close(sfd->fd.fd);
                   }
