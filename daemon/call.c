@@ -817,8 +817,10 @@ forward:
 
 	if (!sink || is_addr_unspecified(&sink->advertised_endpoint.ip46)
 			|| !sink->advertised_endpoint.port
-			|| stun_ret || handler_ret < 0)
+            || stun_ret || handler_ret < 0) {
+			ilog(LOG_WARNING, "Dropping packet to %d", handler_ret);
 		goto drop;
+        }
 
 	ZERO(mh);
 	mh.msg_control = buf;
