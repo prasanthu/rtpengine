@@ -2122,6 +2122,7 @@ static void __fingerprint_changed(struct call_media *m) {
 		ps = l->data;
 		PS_CLEAR(ps, FINGERPRINT_VERIFIED);
 		dtls_shutdown(ps);
+                crypto_reset(&ps->sfd->crypto);
 	}
 }
 
