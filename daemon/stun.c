@@ -480,7 +480,7 @@ int stun(str *b, struct packet_stream *ps, struct sockaddr_in6 *sin) {
 	if (check_auth(b, &attrs, ps->media))
 		goto unauth;
 
-	ilog(LOG_INFO, "Successful STUN binding request" SLF, SLP);
+	ilog(LOG_DEBUG, "Successful STUN binding request" SLF, SLP);
 	stun_binding_success(ps, req, &attrs, sin);
 
 	return attrs.use ? 1 : 0;
