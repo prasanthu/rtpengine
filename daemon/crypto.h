@@ -7,6 +7,7 @@
 #include <glib.h>
 #include "compat.h"
 #include "str.h"
+#include "aux.h"
 
 
 
@@ -57,6 +58,12 @@ struct crypto_suite {
 	const char *dtls_profile_code;
 };
 
+struct crypto_session_params {
+	int unencrypted_srtcp:1,
+	    unencrypted_srtp:1,
+	    unauthenticated_srtp:1;
+};
+
 struct crypto_params {
 	const struct crypto_suite *crypto_suite;
 	/* we only support one master key for now */
@@ -64,6 +71,7 @@ struct crypto_params {
 	unsigned char master_salt[SRTP_MAX_MASTER_SALT_LEN];
 	unsigned char *mki;
 	unsigned int mki_len;
+	struct crypto_session_params session_params;
 };
 
 struct crypto_context {
@@ -73,17 +81,21 @@ struct crypto_context {
 	char session_salt[SRTP_MAX_SESSION_SALT_LEN]; /* k_s */
 	char session_auth_key[SRTP_MAX_SESSION_AUTH_LEN];
 
+	u_int32_t ssrc;
 	u_int64_t last_index;
 	/* XXX replay list */
 	/* <from, to>? */
 
 	void *session_key_ctx[2];
+	GHashTable *ssrc_hash;
 
 	int have_session_key:1;
 };
 
-
-
+struct rtp_ssrc_entry {
+	u_int32_t ssrc;
+	u_int64_t index;
+};
 
 extern const struct crypto_suite crypto_suites[];
 extern const int num_crypto_suites;
@@ -92,6 +104,14 @@ extern const int num_crypto_suites;
 
 const struct crypto_suite *crypto_find_suite(const str *);
 int crypto_gen_session_key(struct crypto_context *, str *, unsigned char, int);
+void crypto_dump_keys(struct crypto_context *in, struct crypto_context *out);
+
+INLINE struct rtp_ssrc_entry *find_ssrc(u_int32_t, GHashTable *);
+INLINE void add_ssrc_entry(struct rtp_ssrc_entry *, GHashTable *);
+INLINE struct rtp_ssrc_entry *create_ssrc_entry(u_int32_t, u_int64_t);
+INLINE void free_ssrc_table(GHashTable **);
+INLINE GHashTable *create_ssrc_table(void);
+
 
 INLINE int crypto_encrypt_rtp(struct crypto_context *c, struct rtp_header *rtp,
 		str *payload, u_int64_t index)
@@ -123,20 +143,31 @@ INLINE void crypto_params_cleanup(struct crypto_params *p) {
 	p->mki = NULL;
 }
 INLINE void crypto_cleanup(struct crypto_context *c) {
+	crypto_params_cleanup(&c->params);
+	free_ssrc_table(&c->ssrc_hash);
 	if (!c->params.crypto_suite)
 		return;
 	if (c->params.crypto_suite->session_key_cleanup)
 		c->params.crypto_suite->session_key_cleanup(c);
 	c->have_session_key = 0;
-	crypto_params_cleanup(&c->params);
+	c->params.crypto_suite = NULL;
 }
 INLINE void crypto_reset(struct crypto_context *c) {
 	crypto_cleanup(c);
 	c->last_index = 0;
+	c->ssrc = 0;
 }
-INLINE void crypto_params_copy(struct crypto_params *o, const struct crypto_params *i) {
+INLINE void crypto_params_copy(struct crypto_params *o, const struct crypto_params *i, int copy_sp) {
+	struct crypto_session_params sp;
+
 	crypto_params_cleanup(o);
+
+	if (!copy_sp)
+		sp = o->session_params;
 	*o = *i;
+	if (!copy_sp)
+		o->session_params = sp;
+
 	if (o->mki_len > 255)
 		o->mki_len = 0;
 	if (o->mki_len) {
@@ -146,9 +177,53 @@ INLINE void crypto_params_copy(struct crypto_params *o, const struct crypto_para
 }
 INLINE void crypto_init(struct crypto_context *c, const struct crypto_params *p) {
 	crypto_cleanup(c);
-	crypto_params_copy(&c->params, p);
+	crypto_params_copy(&c->params, p, 1);
+}
+INLINE int crypto_params_cmp(const struct crypto_params *a, const struct crypto_params *b) {
+       if (a->crypto_suite != b->crypto_suite)
+               return 1;
+       if (!a->crypto_suite)
+               return 0;
+       if (memcmp(a->master_key, b->master_key, a->crypto_suite->master_key_len))
+               return 1;
+       if (memcmp(a->master_salt, b->master_salt, a->crypto_suite->master_salt_len))
+               return 1;
+       if (a->mki_len != b->mki_len)
+               return 1;
+       if (a->mki_len && memcmp(a->mki, b->mki, a->mki_len))
+               return 1;
+       if (memcmp(&a->session_params, &b->session_params, sizeof(a->session_params)))
+	       return 1;
+       return 0;
 }
 
+
+
+INLINE struct rtp_ssrc_entry *find_ssrc(u_int32_t ssrc, GHashTable *ht) {
+	return g_hash_table_lookup(ht, &ssrc);
+}
+INLINE void add_ssrc_entry(struct rtp_ssrc_entry *ent, GHashTable *ht) {
+	g_hash_table_insert(ht, &ent->ssrc, ent);
+}
+INLINE struct rtp_ssrc_entry *create_ssrc_entry(u_int32_t ssrc, u_int64_t index) {
+	struct rtp_ssrc_entry *ent;
+	ent = g_slice_alloc(sizeof(struct rtp_ssrc_entry));
+	ent->ssrc = ssrc;
+	ent->index = index;
+	return ent;
+}
+INLINE void free_ssrc_table(GHashTable **ht) {
+	if (!*ht)
+		return;
+	g_hash_table_destroy(*ht);
+	*ht = NULL;
+}
+INLINE void free_ssrc_entry(void *p) {
+	g_slice_free1(sizeof(struct rtp_ssrc_entry), p);
+}
+INLINE GHashTable *create_ssrc_table(void) {
+	return g_hash_table_new_full(uint32_hash, uint32_eq, free_ssrc_entry, NULL);
+}
 
 
 #endif

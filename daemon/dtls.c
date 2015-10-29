@@ -21,10 +21,10 @@
 
 
 
-/* #define DTLS_DEBUG 1 */
+#define DTLS_DEBUG 0
 
 #if DTLS_DEBUG
-#define __DBG(x...) ilog(LOG_WARNING, x)
+#define __DBG(x...) ilog(LOG_DEBUG, x)
 #else
 #define __DBG(x...) ((void)0)
 #endif
@@ -110,6 +110,52 @@ static void cert_free(void *p) {
 		EVP_PKEY_free(cert->pkey);
 	if (cert->x509)
 		X509_free(cert->x509);
+}
+
+static void buf_dump_free(char *buf, size_t len) {
+	char *p, *f;
+	int llen;
+
+	p = buf;
+	while (len) {
+		f = memchr(p, '\n', len);
+		if (f)
+			llen = f - p;
+		else
+			llen = len;
+
+		ilog(LOG_DEBUG, "--- %.*s", llen, p);
+
+		len -= llen + 1;
+		p = f + 1;
+	}
+
+	free(buf);
+}
+
+static void dump_cert(struct dtls_cert *cert) {
+	FILE *fp;
+	char *buf;
+	size_t len;
+
+	// if (get_log_level() < LOG_DEBUG)
+		return;
+
+	/* cert */
+	fp = open_memstream(&buf, &len);
+	PEM_write_X509(fp, cert->x509);
+	fclose(fp);
+
+	ilog(LOG_DEBUG, "Dump of DTLS certificate:");
+	buf_dump_free(buf, len);
+
+	/* key */
+	fp = open_memstream(&buf, &len);
+	PEM_write_PrivateKey(fp, cert->pkey, NULL, NULL, 0, 0, NULL);
+	fclose(fp);
+
+	ilog(LOG_DEBUG, "Dump of DTLS private key:");
+	buf_dump_free(buf, len);
 }
 
 static int cert_init() {
@@ -201,6 +247,8 @@ static int cert_init() {
 	new_cert->x509 = x509;
 	new_cert->pkey = pkey;
 	new_cert->expires = time(NULL) + CERT_EXPIRY_TIME;
+
+	dump_cert(new_cert);
 
 	/* swap out certs */
 
@@ -435,7 +483,7 @@ int dtls_connection_init(struct packet_stream *ps, int active, struct dtls_cert 
 
 	if (d->init) {
 		if ((d->active && active) || (!d->active && !active))
-			goto connect;
+			goto done;
 		dtls_connection_cleanup(d);
 	}
 
@@ -471,12 +519,17 @@ int dtls_connection_init(struct packet_stream *ps, int active, struct dtls_cert 
 	SSL_set_bio(d->ssl, d->r_bio, d->w_bio);
 	SSL_set_mode(d->ssl, SSL_MODE_ENABLE_PARTIAL_WRITE | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 
+	EC_KEY* ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+	if (ecdh == NULL)
+		goto error;
+	SSL_set_options(d->ssl, SSL_OP_SINGLE_ECDH_USE);
+	SSL_set_tmp_ecdh(d->ssl, ecdh);
+	EC_KEY_free(ecdh);
+
 	d->init = 1;
 	d->active = active ? -1 : 0;
 
-connect:
-	dtls(ps, NULL, NULL);
-
+done:
 	return 0;
 
 error:
@@ -567,6 +620,8 @@ found:
 		crypto_init(&ps->sfd->crypto, &client);
 	}
 
+	crypto_dump_keys(&ps->crypto, &ps->sfd->crypto);
+
 	return 0;
 
 error:
@@ -578,6 +633,7 @@ error:
 	return -1;
 }
 
+/* called with call locked in W or R with ps->in_lock held */
 int dtls(struct packet_stream *ps, const str *s, struct sockaddr_in6 *fsin) {
 	struct dtls_connection *d;
 	int ret;
@@ -587,6 +643,8 @@ int dtls(struct packet_stream *ps, const str *s, struct sockaddr_in6 *fsin) {
 	struct sockaddr_in6 sin;
 
 	if (!ps || !ps->sfd)
+		return 0;
+	if (!MEDIA_ISSET(ps->media, DTLS))
 		return 0;
 
 	d = &ps->sfd->dtls;

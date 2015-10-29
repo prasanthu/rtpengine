@@ -11,7 +11,7 @@
 #include <pcre.h>
 #include <openssl/x509.h>
 #include "compat.h"
-
+#include "aux.h"
 
 enum termination_reason {
 	UNKNOWN=0,
@@ -210,10 +210,12 @@ struct udp_fd {
 	int			fd;
 	u_int16_t		localport;
 };
+#if 0
 struct endpoint {
 	struct in6_addr		ip46;
 	u_int16_t		port;
 };
+#endif
 struct stream_params {
 	unsigned int		index; /* starting with 1 */
 	str			type;

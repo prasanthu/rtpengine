@@ -2012,7 +2012,7 @@ static void __generate_crypto(const struct sdp_ng_flags *flags, struct call_medi
 
 	if (other->sdes_in.params.crypto_suite) {
 		/* SRTP <> SRTP case, copy from other stream */
-		crypto_params_copy(cp, &other->sdes_in.params);
+		crypto_params_copy(cp, &other->sdes_in.params, (flags->opmode == OP_OFFER) ? 1 : 0);
 		return;
 	}
 
@@ -2300,7 +2300,7 @@ int monologue_offer_answer(struct call_monologue *other_ml, GQueue *streams,
 		bf_copy_same(&other_media->media_flags, &sp->sp_flags,
 				SHARED_FLAG_RTCP_MUX | SHARED_FLAG_ASYMMETRIC | SHARED_FLAG_ICE);
 
-		crypto_params_copy(&other_media->sdes_in.params, &sp->crypto);
+		crypto_params_copy(&other_media->sdes_in.params, &sp->crypto, 1);
 		other_media->sdes_in.tag = sp->sdes_tag;
 		if (other_media->sdes_in.params.crypto_suite)
 			MEDIA_SET(other_media, SDES);
@@ -2408,6 +2408,7 @@ static void unkernelize(struct packet_stream *p) {
 	PS_CLEAR(p, KERNELIZED);
 }
 
+#if 0 
 void timeval_subtract (struct timeval *result, const struct timeval *a, const struct timeval *b) {
 	long microseconds=0;
 	microseconds = ((long)a->tv_sec - (long)b->tv_sec) * 1000000 + ((long)a->tv_usec - (long)b->tv_usec);
@@ -2421,21 +2422,21 @@ void timeval_multiply(struct timeval *result, const struct timeval *a, const lon
 	result->tv_sec = microseconds/(long)1000000;
 	result->tv_usec = microseconds%(long)1000000;
 }
-
+#endif
 void timeval_devide(struct timeval *result, const struct timeval *a, const long devisor) {
 	long microseconds=0;
 	microseconds = (((long)a->tv_sec * 1000000) + (long)a->tv_usec) / devisor;
 	result->tv_sec = microseconds/(long)1000000;
 	result->tv_usec = microseconds%(long)1000000;
 }
-
+#if 0
 void timeval_add(struct timeval *result, const struct timeval *a, const struct timeval *b) {
 	long microseconds=0;
 	microseconds = ((long)a->tv_sec + (long)b->tv_sec) * (long)1000000 + ((long)a->tv_usec + (long)b->tv_usec);
 	result->tv_sec = microseconds/(long)1000000;
 	result->tv_usec = microseconds%(long)1000000;
 }
-
+#endif
 /* called lock-free, but must hold a reference to the call */
 void call_destroy(struct call *c) {
 	struct callmaster *m = c->callmaster;
